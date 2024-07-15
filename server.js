@@ -4,10 +4,26 @@ const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const path = require("path");
-
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+app.get('/', (req, res) => {
+  const filePath = path.join(__dirname, 'index.html');
+  fs.readFile(filePath, (err, data) => {
+      if (err) {
+          res.writeHead(500, {'Content-Type': 'text/plain'});
+          res.end('500 - Internal Server Error');
+      } else {
+          res.writeHead(200, {'Content-Type': 'text/html'});
+          res.end(data);
+      }
+  });
+});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
 
 app.post('/resultScraper', async (req, res) => {
     const searchPhrases = req.body.Keywords;
@@ -62,10 +78,6 @@ app.get('/data', async (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
 
 let allResults = [];
 
