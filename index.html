@@ -80,7 +80,7 @@
             })
             .then(response => response.json())
             .then(data => {
-                keyPhrases = data.Keywords.Keywords;
+                keyPhrases = data.Keywords;
                 console.log(keyPhrases);
                 renderList();
             })

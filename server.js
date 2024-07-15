@@ -4,30 +4,20 @@ const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const path = require("path");
+const process = require('process');
 const app = express();
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 app.use(express.json());
 app.use(cors());
 
-// app.get('/', (req, res) => {
-//   const filePath = path.join(__dirname, 'index.html');
-//   fs.readFile(filePath, (err, data) => {
-//       if (err) {
-//           res.writeHead(500, {'Content-Type': 'text/plain'});
-//           res.end('500 - Internal Server Error');
-//       } else {
-//           res.writeHead(200, {'Content-Type': 'text/html'});
-//           res.end(data);
-//       }
-//   });
-// });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
@@ -53,26 +43,36 @@ app.post('/resultScraper', async (req, res) => {
       res.send('An error occurred during the scraping process.');
     }
   });
-  
-  app.post('/processResults', async (req, res) => {
-    const inputText = req.body.text;
-    const gemini_bearer = req.body.Gbearer;
-    
-    exec(`python script.py 2 "${inputText}" "${gemini_bearer}"`, (error, stdout, stderr) => {
-        if (error) {
-            console.error('Exec error:', error);
-            res.status(500).json({ error: 'Execution error' });
-            return;
-        }
-        try {
-            const result = JSON.parse(stdout);
-            res.json({ Keywords: result });
-        } catch (jsonError) {
-            console.error('JSON parse error:', jsonError);
-            res.status(500).json({ error: 'JSON parse error' });
-        }
-    });
+
+app.post('/processResults', async (req, res) => {
+  const inputText = req.body.text;
+  const gemini_bearer = req.body.Gbearer;
+
+  try {
+    const genAI = new GoogleGenerativeAI(gemini_bearer);
+    // const model = genAI.getGenerativeModel({ model: 'gemini-1.0-pro' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+
+    const prompt = `Summarize the following text and extract the relevant key phrases and return only a JSON object with one attribute 'Keywords' and in which the keywords attribute consists of the generated key phrases which can be used in searching educational resources: ${inputText}`;
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+    // Parse JSON with error handling
+    try {
+      const jsonString = text.trim().replace(/^```json\n|\n```$/g, '');
+      const parsedResult = JSON.parse(jsonString);
+      const keywords = parsedResult.Keywords;
+      res.json({ Keywords: keywords });
+    } catch (parseError) {
+      console.error('Error parsing JSON:', parseError);
+      res.status(500).json({ error: 'An error occurred while processing the request' });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({ error: 'An error occurred while processing the request' });
+  }
 });
+  
 
 app.get('/data', async (req, res) => {
   const jsonFilePath = path.join(__dirname, 'extractedDataMOM.json');
@@ -223,7 +223,7 @@ function fileCreate(file_path, data) {
 
 function runPythonScript(inputText,user_input,hf_bearer_token) {
   return new Promise((resolve, reject) => {
-    const command = `python script.py 1 "${inputText}" "${user_input}" "${hf_bearer_token}"`;
+    const command = `python script.py "${inputText}" "${user_input}" "${hf_bearer_token}"`;
     exec(command, (error, stdout, stderr) => {
         if (error) {
             console.error(`Error executing Python script: ${stderr}`);

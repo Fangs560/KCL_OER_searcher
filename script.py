@@ -74,37 +74,22 @@ def clean_unique_items(json_data,userDescription,token):
     
 
 def main():
-    choice = sys.argv[1]
+    file_path= sys.argv[1]
+    userDescription = sys.argv[2]
+    HF_bearer_token = sys.argv[3]
 
-    if(choice == "1"):
-        file_path= sys.argv[2]
-        userDescription = sys.argv[3]
-        HF_bearer_token = sys.argv[4]
+    with open(file_path, 'r', encoding="utf-8") as file:
+        data = json.load(file)
 
-        with open(file_path, 'r', encoding="utf-8") as file:
-            data = json.load(file)
+    unique_items = check_unique_items(data)
+    print("Scraping done")
 
-        unique_items = check_unique_items(data)
-        print("Scraping done")
+    cleaned_items = clean_unique_items(unique_items,userDescription,HF_bearer_token)
 
-        cleaned_items = clean_unique_items(unique_items,userDescription,HF_bearer_token)
+    with open(file_path, 'w', encoding="utf-8") as file:
+        json.dump(cleaned_items, file, ensure_ascii=False, indent=4)
 
-        with open(file_path, 'w', encoding="utf-8") as file:
-            json.dump(cleaned_items, file, ensure_ascii=False, indent=4)
-
-        print("Cleaning done")
-    
-    elif(choice == "2"):
-        import google.generativeai as genai
-        input_text = sys.argv[2]
-        genai.configure(api_key=sys.argv[3])
-
-        model = genai.GenerativeModel('gemini-1.0-pro')
-
-        response = model.generate_content("Summarize the following text and extract the relevant key phrases and return only a JSON object with one attribute 'Keywords' and in which the keywords attribute consists of the generated key phrases which can be used in searching educational resources: "+ input_text)
-        result = json.loads(' '.join(response.text.split()[1:-1]))
-        Keyphrases = result["Keywords"]
-        print(json.dumps({'Keywords':Keyphrases}))
+    print("Cleaning done")
 
 if __name__ == "__main__":
     main()
