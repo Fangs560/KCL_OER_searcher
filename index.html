@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Text Processor</title>
+    <style>
+        .editable {
+            display: inline-block;
+            padding: 5px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        .input-edit {
+            width: calc(100% - 12px);
+            padding: 5px;
+        }
+        .item-odd{
+            background-color: #efefef;
+        }
+    </style>
+</head>
+<body>
+    <h1>Enhanced OER Search</h1>
+    <form id="text-form">
+    <textarea id="input-text" rows="10" cols="80"></textarea><br>
+    <input id="g-bearer-token" placeholder="Enter your Gemini bearer token here"><br><br>
+        <button type="submit">Submit</button>
+    </form>
+    <br>
+    <input type="text" id="new-keyphrase" placeholder="Add new keyphrase">
+    <button id="add-keyphrase">Add Keyphrase</button>
+    <div id="Keywords"></div>
+    <ul id="list"></ul>
+    
+    <br><input id="hf-bearer-token" placeholder="Enter your HuggingFace bearer token here"><br>
+    <form id="scraper-form">
+        <button type="submit">Send for Scraping</button>
+    </form>
+    <div id="results"></div>
+    <div id="pagination">
+        <button id="prevPage" onclick="prevPage()">Previous</button>
+        <span id="pageInfo"></span>
+        <button id="nextPage" onclick="nextPage()">Next</button>
+    </div>
+    <div id="content-container"></div>
+    <div id="pagination">
+        <button id="prevPage" onclick="prevPage()">Previous</button>
+        <span id="pageInfo"></span>
+        <button id="nextPage" onclick="nextPage()">Next</button>
+    </div>
+
+    <script>
+        let keyPhrases = [];
+        let input_text = "";
+        let currentPage = 1;
+        let resultsPerPage = 15;
+        let allData = [];
+
+        document.getElementById('text-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            input_text = document.getElementById('input-text').value;
+            if (input_text.includes('\0') || !input_text) {
+                alert('The input text contains null characters. Please remove them.');
+                return;
+            }
+            document.getElementById('Keywords').innerText="";
+
+            Gemini_bearer_token = document.getElementById('g-bearer-token').value;
+            if (Gemini_bearer_token.includes('\0') || !Gemini_bearer_token) {
+                alert('Please enter a Google Gemini connected bearer token.');
+                return;
+            }
+            
+            fetch('http://127.0.0.1:3000/processResults', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ text: input_text ,Gbearer : Gemini_bearer_token })
+            })
+            .then(response => response.json())
+            .then(data => {
+                keyPhrases = data.Keywords.Keywords;
+                console.log(keyPhrases);
+                renderList();
+            })
+            .catch(error => {
+                document.getElementById('Keywords').innerText = "Error. Please try Re-submitting or check your API key.";
+                console.error('Error:', error);
+            });
+        });
+
+        document.getElementById('scraper-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            if (keyPhrases.length === 0) {
+                alert('The key phrase list is empty. Please add at least one key phrase before sending for scraping.');
+                return;
+            }
+            HuggingFace_bearer_token = document.getElementById('hf-bearer-token').value;
+            if (HuggingFace_bearer_token.includes('\0') || !HuggingFace_bearer_token) {
+                alert('Please enter a HuggingFace connected bearer token.');
+                return;
+            }
+            
+            fetch('http://localhost:3000/resultScraper', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ Keywords: keyPhrases, Description: input_text , HFbearer : HuggingFace_bearer_token})
+            })
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('results').innerText = data;
+                fetchData();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('results').innerText = "An error occurred: " + error.message;
+            });
+        });
+
+
+        function fetchData() {
+            fetch('http://localhost:3000/data', {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                allData = data;
+                currentPage = 1;
+                displayData();
+            })
+            .catch(error => console.error('Error:', error));
+        }
+
+        function displayData() {
+            const contentContainer = document.getElementById('content-container');
+            contentContainer.innerHTML = '';
+            const startIndex = (currentPage - 1) * resultsPerPage;
+            const endIndex = Math.min(startIndex + resultsPerPage, allData.length);
+            for (let i = startIndex; i < endIndex; i++) {
+                const item = document.createElement('div');
+                if(i%2==0){
+                    item.className = 'item-even';
+                    item.innerHTML = `
+                        <span><strong>Title:</strong><a href="${allData[i].Link}" target="_blank"> ${allData[i].Title}</a></span><br>
+                        <span><strong>Source Name:</strong> ${allData[i].SourceName}</span><br>
+                        <span><strong>Author:</strong> ${allData[i].Author}</span><br>
+                        <span><strong>Date:</strong> ${allData[i].Date}</span><br>
+                        <span><strong>Keywords:</strong> ${allData[i].Keywords}</span><br>
+                        <span><strong>Description:</strong> ${allData[i].Description}</span>    
+                        <br><br>
+                        `;
+                        contentContainer.appendChild(item);
+                    }
+                    else{
+                        item.className = 'item-odd';
+                        item.innerHTML = `
+                        <span><strong>Title:</strong><a href="${allData[i].Link}" target="_blank"> ${allData[i].Title}</a></span><br>
+                        <span><strong>Source Name:</strong> ${allData[i].SourceName}</span><br>
+                        <span><strong>Author:</strong> ${allData[i].Author}</span><br>
+                        <span><strong>Date:</strong> ${allData[i].Date}</span><br>
+                        <span><strong>Keywords:</strong> ${allData[i].Keywords}</span><br>
+                        <span><strong>Description:</strong> ${allData[i].Description}</span>
+                        <br>
+                        <br>
+                    `;
+                    contentContainer.appendChild(item);
+
+                }
+            }
+            updatePagination();
+        }
+
+
+        function updatePagination() {
+            const pageInfo = document.getElementById('pageInfo');
+            pageInfo.textContent = `Page ${currentPage} of ${Math.ceil(allData.length / resultsPerPage)}`;
+            document.getElementById('prevPage').disabled = currentPage === 1;
+            document.getElementById('nextPage').disabled = currentPage === Math.ceil(allData.length / resultsPerPage);
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                displayData();
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < Math.ceil(allData.length / resultsPerPage)) {
+                currentPage++;
+                displayData();
+            }
+        }
+
+        document.getElementById('add-keyphrase').addEventListener('click', function() {
+            const newKeyphrase = document.getElementById('new-keyphrase').value;
+            if (newKeyphrase && keyPhrases.length < 10) {
+                keyPhrases.push(newKeyphrase);
+                document.getElementById('new-keyphrase').value = '';
+                renderList();
+            } else if (keyPhrases.length >= 10) {
+                alert('You can only add up to 10 keyphrases.');
+            }
+        });
+
+        function renderList() {
+            const listElement = document.getElementById('list');
+            listElement.innerHTML = '';
+            keyPhrases.forEach((item, index) => {
+                const li = document.createElement('li');
+                const span = document.createElement('span');
+                span.className = 'editable';
+                span.textContent = item;
+                span.addEventListener('click', () => editItem(index, span));
+
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete';
+                deleteButton.className = 'delete-button';
+                deleteButton.addEventListener('click', () => deleteItem(index));
+
+                li.appendChild(span);
+                li.appendChild(deleteButton);
+                listElement.appendChild(li);
+            });
+        }
+
+        function editItem(index, spanElement) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = keyPhrases[index];
+            input.className = 'input-edit';
+            input.addEventListener('blur', () => saveItem(index, input, spanElement));
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    input.blur();
+                }
+            });
+            spanElement.replaceWith(input);
+            input.focus();
+        }
+
+        function saveItem(index, inputElement, spanElement) {
+            keyPhrases[index] = inputElement.value;
+            spanElement.textContent = inputElement.value;
+            inputElement.replaceWith(spanElement);
+        }
+
+        function deleteItem(index) {
+            keyPhrases.splice(index, 1);
+            renderList();
+        }
+
+    </script>
+    
+</body>
+</html>
