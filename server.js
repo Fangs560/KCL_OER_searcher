@@ -8,19 +8,26 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// app.get('/', (req, res) => {
+//   const filePath = path.join(__dirname, 'index.html');
+//   fs.readFile(filePath, (err, data) => {
+//       if (err) {
+//           res.writeHead(500, {'Content-Type': 'text/plain'});
+//           res.end('500 - Internal Server Error');
+//       } else {
+//           res.writeHead(200, {'Content-Type': 'text/html'});
+//           res.end(data);
+//       }
+//   });
+// });
+
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.get('/', (req, res) => {
-  const filePath = path.join(__dirname, 'index.html');
-  fs.readFile(filePath, (err, data) => {
-      if (err) {
-          res.writeHead(500, {'Content-Type': 'text/plain'});
-          res.end('500 - Internal Server Error');
-      } else {
-          res.writeHead(200, {'Content-Type': 'text/html'});
-          res.end(data);
-      }
-  });
+  res.sendFile(path.join(__dirname, 'index.html'));
 });
-const PORT = process.env.PORT || 3000;
+
+const PORT = process.env.PORT;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
