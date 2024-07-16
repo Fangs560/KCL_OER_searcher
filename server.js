@@ -6,6 +6,7 @@ const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const path = require("path");
+const https = require('https');
 const process = require('process');
 const app = express();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -135,8 +136,12 @@ async function scrapeData(phrase, maxRetries = 3) {
   let attempts = 0;
   while (attempts < maxRetries) {
     try {
+      const agent = new https.Agent({  
+        rejectUnauthorized: false
+      });
+
       const baseUrl = 'https://oer.deepwebaccess.com/oer/desktop/en/search.html';
-      const response = await axios.get(baseUrl);
+      const response = await axios.get(baseUrl,{httpsAgent:agent});
       const $ = cheerio.load(response.data);
 
       const searchResponse = await axios.post(baseUrl, new URLSearchParams({
@@ -148,7 +153,7 @@ async function scrapeData(phrase, maxRetries = 3) {
           'Content-Type': 'application/x-www-form-urlencoded',
           'X-Requested-With': 'XMLHttpRequest'
         }
-      });
+      },{httpsAgent:agent});
 
       let phraseResults = [];
       for (let pageNum = 1; pageNum <= 3; pageNum++) {
@@ -166,7 +171,7 @@ async function scrapeData(phrase, maxRetries = 3) {
               'Content-Type': 'application/x-www-form-urlencoded',
               'X-Requested-With': 'XMLHttpRequest'
             }
-          });
+          },{httpsAgent:agent});
           searchResponse.data = nextPageResponse.data;
         }
       }
