@@ -1,6 +1,6 @@
-// const puppeteer = require('puppeteer');
-const axios = require('axios');
-const cheerio = require('cheerio');
+const puppeteer = require('puppeteer');
+// const axios = require('axios');
+// const cheerio = require('cheerio');
 const { exec } = require('child_process');
 const fs = require('fs');
 const express = require('express');
@@ -89,101 +89,116 @@ app.get('/data', async (req, res) => {
 });
 
 let allResults = [];
-async function extractDataFromPage(html) {
-  const $ = cheerio.load(html);
-  const results = [];
-
-  $('.result-list .result.even, .result-list .result.odd').each((index, element) => {
-    const extractData = {};
-    const titleElement = $(element).find('.result-title span[data-bind="html: title"]');
-    if (titleElement.length) {
-      extractData.Title = titleElement.text().replace(/\s+/g, ' ').trim();
-    } else {
-      extractData.Title = "";
-    }
-
-    const linkElement = $(element).find('.result-title');
-    extractData.Link = linkElement.attr('href') || "";
-
-    const sourceNameElement = $(element).find('[data-bind="html: sourceName"]');
-    extractData.SourceName = sourceNameElement.text().trim();
-
-    const authorElement = $(element).find('[id^="authors-result_"]');
-    extractData.Author = authorElement.text().trim();
-
-    const dateElement = $(element).find('[data-bind="foreach: dates"] [data-bind="html: value"]');
-    extractData.Date = dateElement.text().trim();
-
-    let keywordsElement = "";
-    $(element).find('div').each((i, div) => {
-      if ($(div).text().includes('Keywords:')) {
-        keywordsElement = $(div).find('span[data-bind*="keywords.join"]');
-        return false;
-      }
+async function extractDataFromPage(page) {
+  try {
+    await page.waitForSelector('.result-list');
+    const results = await page.evaluate(() => {
+      const extractDataArray = [];
+      const resultElements = document.querySelectorAll('.result-list .result.even, .result-list .result.odd');
+      resultElements.forEach(result => {
+        const extractData = {};
+        const titleElement = result.querySelector('.result-title span[data-bind="html: title"]');
+        if (titleElement) {
+          const clone = titleElement.cloneNode(true);
+          clone.querySelectorAll('span.hlt').forEach(innerSpan => {
+            innerSpan.replaceWith(innerSpan.textContent);
+          });
+          extractData.Title = clone.textContent.trim();
+        } else {
+          extractData.Title = "";
+        }
+        const linkElement = result.querySelector('.result-title');
+        extractData.Link = linkElement ? linkElement.getAttribute('href') : "";
+        const sourceNameElement = result.querySelector('[data-bind="html: sourceName"]');
+        extractData.SourceName = sourceNameElement ? sourceNameElement.textContent.trim() : "";
+        const authorElement = result.querySelector('[id^="authors-result_"]');
+        extractData.Author = authorElement ? authorElement.textContent.trim() : "";
+        const dateElement = result.querySelector('[data-bind="foreach: dates"] [data-bind="html: value"]');
+        extractData.Date = dateElement ? dateElement.textContent.trim() : "";
+        let keywordsElement = "";
+        const divElements = result.querySelectorAll('div');
+        divElements.forEach(div => {
+          if (div.textContent.includes('Keywords:')) {
+            keywordsElement = div.querySelector('span[data-bind*="keywords.join"]');
+          }
+        });
+        extractData.Keywords = keywordsElement ? keywordsElement.textContent.split(',').map(keyword => keyword.trim()) : "";
+        const descriptionElement = result.querySelector('.result-snippet');
+        extractData.Description = descriptionElement ? descriptionElement.textContent.trim() : "";
+        extractDataArray.push(extractData);
+      });
+      return extractDataArray;
     });
-    extractData.Keywords = keywordsElement ? keywordsElement.text().split(',').map(keyword => keyword.trim()) : "";
 
-    const descriptionElement = $(element).find('.result-snippet');
-    extractData.Description = descriptionElement.text().trim();
-
-    results.push(extractData);
-  });
-
-  return results;
+    console.log('Extracted results!');
+    return results;
+  } catch (error) {
+    console.error('Error extracting data from page:', error);
+    return [];
+  }
 }
+
 
 async function scrapeData(phrase, maxRetries = 3) {
   let attempts = 0;
   while (attempts < maxRetries) {
     try {
-      const agent = new https.Agent({  
-        rejectUnauthorized: false
+      const browser = await puppeteer.launch({ 
+        headless: true,
+        defaultViewport: false,
       });
 
-      const baseUrl = 'https://oer.deepwebaccess.com/oer/desktop/en/search.html';
-      const response = await axios.get(baseUrl,{httpsAgent:agent});
-      const $ = cheerio.load(response.data);
+      const page = await browser.newPage();
+      await page.goto('https://oer.deepwebaccess.com/oer/desktop/en/search.html', { waitUntil: 'networkidle2' });
 
-      const searchResponse = await axios.post(baseUrl, new URLSearchParams({
-        'FULLRECORD': phrase,
-        'CurrentPage': '1',
-        'ResultsPerPage': '20'
-      }), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'X-Requested-With': 'XMLHttpRequest'
-        }
-      },{httpsAgent:agent});
-
+      page.setDefaultTimeout(60000);
+      await page.waitForSelector('#FULLRECORD');
+      console.log(`Page loaded for phrase: ${phrase}`);
+      await page.type('#FULLRECORD', phrase);
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#add-results-modal', { visible: true });
+      await page.waitForSelector('#add-results-modal .btn.btn-primary');
+      await page.click('#add-results-modal .btn.btn-primary');
+      console.log(`Got additional results for phrase: ${phrase}`);
+      
       let phraseResults = [];
       for (let pageNum = 1; pageNum <= 3; pageNum++) {
         console.log(`Extracting data from page ${pageNum} for phrase: ${phrase}...`);
-        const pageResults = await extractDataFromPage(searchResponse.data);
+        const pageResults = await extractDataFromPage(page);
         phraseResults = phraseResults.concat(pageResults);
-
         if (pageNum < 3) {
-          const nextPageResponse = await axios.post(baseUrl, new URLSearchParams({
-            'FULLRECORD': phrase,
-            'CurrentPage': (pageNum + 1).toString(),
-            'ResultsPerPage': '20'
-          }), {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'X-Requested-With': 'XMLHttpRequest'
-            }
-          },{httpsAgent:agent});
-          searchResponse.data = nextPageResponse.data;
+          try {
+            const expectedStartNum = pageNum * 20 + 1;
+            await page.waitForSelector('li:not(.disabled) a[data-bind="click: function(){ CurrentPage(CurrentPage() + 1); }"]', { visible: true });
+            await page.evaluate(() => {
+              const nextButton = document.querySelector('li:not(.disabled) a[data-bind="click: function(){ CurrentPage(CurrentPage() + 1); }"]');
+              if (nextButton) nextButton.click();
+            });
+            await page.waitForFunction(
+              (expectedStartNum) => {
+                const startNumElement = document.querySelector('#current-results span[data-bind="count: startNum"]');
+                return startNumElement && parseInt(startNumElement.textContent, 10) === expectedStartNum;
+              },
+              { timeout: 5000 },
+              expectedStartNum
+            );
+          } catch (error) {
+            console.error(`Error navigating to page ${pageNum + 1} for phrase: ${phrase}`, error);
+            break;
+          }
         }
       }
 
       allResults = allResults.concat(phraseResults);
+      await browser.close();
+      
       break;
     } catch (error) {
       attempts++;
       console.error(`Attempt ${attempts} failed for phrase: ${phrase}`, error);
       if (attempts >= maxRetries) {
         console.error(`Max retries reached for phrase: ${phrase}.`);
-        throw error;
+        throw error; 
       }
     }
   }
