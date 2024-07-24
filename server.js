@@ -32,7 +32,18 @@ app.post('/resultScraper', async (req, res) => {
     if (!Array.isArray(searchPhrases)) {
       return res.status(400).send('Invalid input. Expected an array of search phrases.');
     }
-    
+    exec(`pip install selenium`, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error executing pip command: ${error.message}`);
+        // reject(error);
+      } else if (stderr) {
+        console.error(`Pip command stderr: ${stderr}`);
+        // reject(new Error(stderr));
+      } else {
+        console.log(`Pip command output: ${stdout}`);
+        // resolve(stdout);
+      }
+    });
     allResults = [];  
     try {
       const promises = searchPhrases.map(phrase => scrapeData(phrase));
