@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
     <meta charset="UTF-8">
     <title>Text Processor</title>
     <style>
@@ -8,46 +9,61 @@
             display: inline-block;
             padding: 5px;
             border: 1px solid #ccc;
-            cursor: pointer;
-        }
-        .input-edit {
-            width: calc(100% - 12px);
-            padding: 5px;
-        }
-        .item-odd{
-            background-color: #efefef;
         }
     </style>
 </head>
 <body>
-    <h1>Enhanced OER Search</h1>
-    <form id="text-form">
-    <textarea id="input-text" rows="10" cols="80"></textarea><br>
-    <input id="g-bearer-token" placeholder="Enter your Gemini bearer token here"><br><br>
-        <button type="submit">Submit</button>
-    </form>
+    <nav class="navbar navbar-light bg-light">
+        <div class="container-fluid">
+          <span class="navbar-brand mb-0 h1">Enhanced OER Search</span>
+        </div>
+      </nav>
     <br>
-    <input type="text" id="new-keyphrase" placeholder="Add new keyphrase">
-    <button id="add-keyphrase">Add Keyphrase</button>
-    <div id="Keywords"></div>
-    <ul id="list"></ul>
+    <div class="container">
+        <div class="row">
+            <div class="col"></div>
+            <div class="col-6">
+                <form id="text-form" >
+                    <div class="form-floating">
+                    <textarea class="form-control"id="input-text" style="height: 100px"></textarea>
+                <label for="input-text">Please give your description</label></div>
+                <br>
+                    <input id="g-bearer-token" placeholder="Enter your Gemini bearer token here" style="width: 350px">
+                    <span id="g-bearer-token-status"></span>
+                    <br><br>
+                    <button disabled id="submit-google" class="btn btn-primary" type="submit">Submit</button>
+                    <br><br>
+                </form>
+            </div>
+            <div class="col"></div>
+        </div>
+        <div class="row">
+            <div class="col"></div>
+            <div class="col-6">
+                <input type="text" id="new-keyphrase" placeholder="Add new keyphrase">
+                <button id="add-keyphrase">Add Keyphrase</button>
+                <div id="Keywords"></div>
+                <ul id="list"></ul>
+            </div>
+            <div class="col"></div>
+        </div>
+        <div class="row">
+            <div class="col"></div>
+            <div class="col-6">
+                <br><input id="hf-bearer-token" placeholder="Enter your HuggingFace bearer token here" style="width: 350px">
+                <span id="hf-bearer-token-status"></span><br>
+                <form id="scraper-form">
+                    <button disabled id="submit-hf" class="btn btn-primary" type="submit">Send for Scraping</button>
+                </form>
+                <div id="results"></div>
+            </div>
+            <div class="col"></div>
+        </div>
+    </div>
+    <br>
     
-    <br><input id="hf-bearer-token" placeholder="Enter your HuggingFace bearer token here"><br>
-    <form id="scraper-form">
-        <button type="submit">Send for Scraping</button>
-    </form>
-    <div id="results"></div>
-    <div id="pagination">
-        <button id="prevPage" onclick="prevPage()">Previous</button>
-        <span id="pageInfo"></span>
-        <button id="nextPage" onclick="nextPage()">Next</button>
-    </div>
+    <div id="pagination"></div>
     <div id="content-container"></div>
-    <div id="pagination">
-        <button id="prevPage" onclick="prevPage()">Previous</button>
-        <span id="pageInfo"></span>
-        <button id="nextPage" onclick="nextPage()">Next</button>
-    </div>
 
     <script>
         let keyPhrases = [];
@@ -112,7 +128,7 @@
             .then(response => response.text())
             .then(data => {
                 document.getElementById('results').innerText = data;
-                fetchData();
+                return fetchData();
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -120,6 +136,71 @@
             });
         });
 
+        document.getElementById('g-bearer-token').addEventListener('blur', verifyGoogleToken);
+        function verifyGoogleToken(){
+            document.getElementById("g-bearer-token-status").innerText="";
+            const tokenInput = document.getElementById('g-bearer-token');
+            document.getElementById("g-bearer-token-status").classList.remove("text-success");
+            document.getElementById("g-bearer-token-status").classList.remove("text-danger");
+            const tokenValue = tokenInput.value;
+            fetch('/verifyGoogle',{
+                method:'POST',
+                headers:{
+                    'Content-Type':'application/json'
+                },
+                body: JSON.stringify({Gbearer: tokenValue})
+            })
+            .then(response => response.json())
+            .then(data => {
+                const tokenStatus = data.status;
+                if (tokenStatus === "Valid API bearer token") {
+                    document.getElementById("g-bearer-token-status").innerText=tokenStatus;
+                    document.getElementById("g-bearer-token-status").classList.add("text-success");
+                    tokenInput.classList.remove('border-danger');
+                    tokenInput.classList.add('border-success');
+                    tokenInput.disabled = true;
+                    document.getElementById("submit-google").disabled=false
+                } else if (tokenStatus === "Invalid API bearer token") {
+                    document.getElementById("g-bearer-token-status").innerText=tokenStatus;
+                    document.getElementById("g-bearer-token-status").classList.add("text-danger");
+                    tokenInput.classList.remove('border-success');
+                    tokenInput.classList.add('border-danger');
+                }
+            })
+        }
+        
+        document.getElementById('hf-bearer-token').addEventListener('blur', verifyHuggingFaceToken);
+        function verifyHuggingFaceToken(){
+            document.getElementById("hf-bearer-token-status").innerText="";
+            const tokenInput = document.getElementById('hf-bearer-token');
+            document.getElementById("hf-bearer-token-status").classList.remove("text-success");
+            document.getElementById("hf-bearer-token-status").classList.remove("text-danger");
+            const tokenValue = tokenInput.value;
+            fetch('/verifyHuggingFace',{
+                method:'POST',
+                headers:{
+                    'Content-Type':'application/json'
+                },
+                body: JSON.stringify({hf_bearer_token: tokenValue})
+            })
+            .then(response => response.json())
+            .then(data => {
+                const tokenStatus = data.status;
+                if (tokenStatus === "Valid API bearer token") {
+                    document.getElementById("hf-bearer-token-status").innerText=tokenStatus;
+                    document.getElementById("hf-bearer-token-status").classList.add("text-success");
+                    tokenInput.classList.remove('border-danger');
+                    tokenInput.classList.add('border-success');
+                    tokenInput.disabled = true;
+                    document.getElementById("submit-hf").disabled=false
+                } else if (tokenStatus === "Invalid API bearer token") {
+                    document.getElementById("hf-bearer-token-status").innerText=tokenStatus;
+                    document.getElementById("hf-bearer-token-status").classList.add("text-danger");
+                    tokenInput.classList.remove('border-success');
+                    tokenInput.classList.add('border-danger');
+                }
+            })
+        }
 
         function fetchData() {
             fetch('/data', {
@@ -136,35 +217,41 @@
             })
             .catch(error => console.error('Error:', error));
         }
-
         function displayData() {
+            const paginationContainer = document.getElementById('pagination');
+            paginationContainer.innerHTML = `
+                <button id="prevPage" onclick="prevPage()">Previous</button>
+                <span id="pageInfo"></span>
+                <button id="nextPage" onclick="nextPage()">Next</button>
+            `;
             const contentContainer = document.getElementById('content-container');
             contentContainer.innerHTML = '';
             const startIndex = (currentPage - 1) * resultsPerPage;
             const endIndex = Math.min(startIndex + resultsPerPage, allData.length);
             for (let i = startIndex; i < endIndex; i++) {
                 const item = document.createElement('div');
+                item.classList.add("list-group");
                 if(i%2==0){
-                    item.className = 'item-even';
+                    item.classList.add("list-group-item-secondary");
                     item.innerHTML = `
-                        <span><strong>Title:</strong><a href="${allData[i].Link}" target="_blank"> ${allData[i].Title}</a></span><br>
-                        <span><strong>Source Name:</strong> ${allData[i].SourceName}</span><br>
-                        <span><strong>Author:</strong> ${allData[i].Author}</span><br>
-                        <span><strong>Date:</strong> ${allData[i].Date}</span><br>
-                        <span><strong>Keywords:</strong> ${allData[i].Keywords}</span><br>
-                        <span><strong>Description:</strong> ${allData[i].Description}</span>    
-                        <br><br>
-                        `;
-                        contentContainer.appendChild(item);
-                    }
-                    else{
-                        item.className = 'item-odd';
+                    <span><strong>Title:</strong><a href="${allData[i].Link}" target="_blank"> ${allData[i].Title}</a></span>
+                    <span><strong>Source Name:</strong> ${allData[i].SourceName}</span>
+                    <span><strong>Author:</strong> ${allData[i].Author}</span>
+                    <span><strong>Date:</strong> ${allData[i].Date}</span>
+                    <span><strong>Keywords:</strong> ${allData[i].Keywords}</span>
+                    <span><strong>Description:</strong> ${allData[i].Description}</span>    
+                    <br><br>
+                    `;
+                    contentContainer.appendChild(item);
+                }
+                else{
+                        item.classList.add("list-group-item-light");
                         item.innerHTML = `
-                        <span><strong>Title:</strong><a href="${allData[i].Link}" target="_blank"> ${allData[i].Title}</a></span><br>
-                        <span><strong>Source Name:</strong> ${allData[i].SourceName}</span><br>
-                        <span><strong>Author:</strong> ${allData[i].Author}</span><br>
-                        <span><strong>Date:</strong> ${allData[i].Date}</span><br>
-                        <span><strong>Keywords:</strong> ${allData[i].Keywords}</span><br>
+                        <span><strong>Title:</strong><a href="${allData[i].Link}" target="_blank"> ${allData[i].Title}</a></span>
+                        <span><strong>Source Name:</strong> ${allData[i].SourceName}</span>
+                        <span><strong>Author:</strong> ${allData[i].Author}</span>
+                        <span><strong>Date:</strong> ${allData[i].Date}</span>
+                        <span><strong>Keywords:</strong> ${allData[i].Keywords}</span>
                         <span><strong>Description:</strong> ${allData[i].Description}</span>
                         <br>
                         <br>
@@ -214,48 +301,64 @@
             listElement.innerHTML = '';
             keyPhrases.forEach((item, index) => {
                 const li = document.createElement('li');
+
+                const listItemContent = document.createElement("div");
+                listItemContent.className="input-group";
+
                 const span = document.createElement('span');
                 span.className = 'editable';
                 span.textContent = item;
-                span.addEventListener('click', () => editItem(index, span));
-
+                
+                const editButton = document.createElement('button');
+                editButton.textContent = 'Edit';
+                editButton.className = 'btn btn-outline-primary';
+                editButton.addEventListener('click', () => editItem(index, span,editButton));
+                
                 const deleteButton = document.createElement('button');
                 deleteButton.textContent = 'Delete';
-                deleteButton.className = 'delete-button';
+                deleteButton.className = 'btn btn-outline-danger';
                 deleteButton.addEventListener('click', () => deleteItem(index));
-
+                
                 li.appendChild(span);
+                li.appendChild(editButton);
                 li.appendChild(deleteButton);
                 listElement.appendChild(li);
             });
         }
-
-        function editItem(index, spanElement) {
+        
+        function editItem(index, spanElement, editElement) {
             const input = document.createElement('input');
             input.type = 'text';
             input.value = keyPhrases[index];
             input.className = 'input-edit';
-            input.addEventListener('blur', () => saveItem(index, input, spanElement));
-            input.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    input.blur();
-                }
+            const confirmButton = document.createElement('button');
+            confirmButton.textContent = 'Confirm ?';
+            confirmButton.className = 'btn btn-outline-success';
+            editElement.replaceWith(confirmButton);
+
+            confirmButton.addEventListener('click', () => {
+                const editButton = document.createElement('button');
+                editButton.textContent = 'Edit';
+                editButton.className = 'btn btn-outline-primary';
+                editButton.addEventListener('click', () => editItem(index, spanElement,editButton));
+                confirmButton.replaceWith(editButton);
+                saveItem(index, input,spanElement);
             });
             spanElement.replaceWith(input);
             input.focus();
         }
-
+                
         function saveItem(index, inputElement, spanElement) {
             keyPhrases[index] = inputElement.value;
             spanElement.textContent = inputElement.value;
             inputElement.replaceWith(spanElement);
         }
-
+        
         function deleteItem(index) {
             keyPhrases.splice(index, 1);
             renderList();
         }
-
+                
     </script>
     
 </body>

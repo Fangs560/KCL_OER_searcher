@@ -4,8 +4,6 @@ import json
 def check_unique_items(json_data):
     seen_titles = set()
     seen_links = set()
-
-
     unique_items = []
     count=0
     for item in json_data:
@@ -19,7 +17,6 @@ def check_unique_items(json_data):
             unique_items.append(item)
         else:
             count+=1
-
     print("Removed "+str(count)+" items")
     return unique_items
 
@@ -65,7 +62,6 @@ def clean_unique_items(json_data,userDescription,token):
     for i in range(0,len(output)-1,2):
         if(max(output[i],output[i+1])>=0.4):
             final.append((json_data[i//2],max(output[i],output[i+1])))
-
     final.sort(key=lambda x: x[1], reverse=True)
     final_list = [item[0] for item in final]        
 

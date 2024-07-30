@@ -1,12 +1,10 @@
 const puppeteer = require('puppeteer');
-// const axios = require('axios');
-// const cheerio = require('cheerio');
+const axios = require('axios');
 const { exec } = require('child_process');
 const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const path = require("path");
-const https = require('https');
 const process = require('process');
 const app = express();
 const { GoogleGenerativeAI } = require('@google/generative-ai');
@@ -25,6 +23,40 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
 
+app.post('/verifyHuggingFace', async(req,res)=>{
+    const hg_token = req.body.hf_bearer_token;
+    axios.get('https://huggingface.co/api/whoami-v2', {
+      headers: {
+        'Authorization': `Bearer ${hg_token}`
+      }
+    })
+    .then(response => {
+      console.log("Valid HuggingFace token");
+      res.status(200).json({status:"Valid API bearer token" });
+    })
+    .catch(error => {
+      console.log("Invalid HuggingFace token");
+      res.status(200).json({status:"Invalid API bearer token" });
+    });
+});
+
+app.post('/verifyGoogle', async(req,res)=>{
+    const google_token = req.body.Gbearer;
+    const genAI = new GoogleGenerativeAI(google_token);
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    try {
+      const prompt = `Hi`;
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const text = response.text();
+      console.log("Valid Google token");
+      res.status(200).json({status:"Valid API bearer token" });
+    } catch (error) {
+      console.log("Invalid Google token");
+      res.status(200).json({status:"Invalid API bearer token" });
+    }
+});
+
 app.post('/resultScraper', async (req, res) => {
     const searchPhrases = req.body.Keywords;
     const user_input = req.body.Description;
@@ -32,25 +64,24 @@ app.post('/resultScraper', async (req, res) => {
     if (!Array.isArray(searchPhrases)) {
       return res.status(400).send('Invalid input. Expected an array of search phrases.');
     }
-    exec(`pip install selenium`, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error executing pip command: ${error.message}`);
-        // reject(error);
-      } else if (stderr) {
-        console.error(`Pip command stderr: ${stderr}`);
-        // reject(new Error(stderr));
-      } else {
-        console.log(`Pip command output: ${stdout}`);
-        // resolve(stdout);
-      }
-    });
     allResults = [];  
     try {
       const promises = searchPhrases.map(phrase => scrapeData(phrase));
       await Promise.all(promises);
       const jsonFilePath = 'extractedDataMOM.json';
       fileCreate(jsonFilePath, allResults);
-      await runPythonScript(jsonFilePath,user_input,hf_bearer_token);
+      await new Promise((resolve, reject) => {
+        const command = `python similarity.py "${jsonFilePath}" "${user_input}" "${hf_bearer_token}"`;
+        exec(command, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Error executing Python script: ${stderr}`);
+                reject(error);
+            } else {
+                console.log(`Python script output: ${stdout}`);
+                resolve(stdout);
+            }
+        });
+    });
       res.send('Scraping and cleaning completed successfully.');
     } catch (error) {
       console.error('Error in scraping process:', error);
@@ -64,14 +95,12 @@ app.post('/processResults', async (req, res) => {
 
   try {
     const genAI = new GoogleGenerativeAI(gemini_bearer);
-    // const model = genAI.getGenerativeModel({ model: 'gemini-1.0-pro' });
     const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
     const prompt = `Summarize the following text and extract the relevant key phrases and return only a JSON object with one attribute 'Keywords' and in which the keywords attribute consists of the generated key phrases which can be used in searching educational resources: ${inputText}`;
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
-    // Parse JSON with error handling
     try {
       const jsonString = text.trim().replace(/^```json\n|\n```$/g, '');
       const parsedResult = JSON.parse(jsonString);
@@ -100,151 +129,121 @@ app.get('/data', async (req, res) => {
 });
 
 let allResults = [];
-// async function extractDataFromPage(page) {
-//   try {
-//     await page.waitForSelector('.result-list');
-//     const results = await page.evaluate(() => {
-//       const extractDataArray = [];
-//       const resultElements = document.querySelectorAll('.result-list .result.even, .result-list .result.odd');
-//       resultElements.forEach(result => {
-//         const extractData = {};
-//         const titleElement = result.querySelector('.result-title span[data-bind="html: title"]');
-//         if (titleElement) {
-//           const clone = titleElement.cloneNode(true);
-//           clone.querySelectorAll('span.hlt').forEach(innerSpan => {
-//             innerSpan.replaceWith(innerSpan.textContent);
-//           });
-//           extractData.Title = clone.textContent.trim();
-//         } else {
-//           extractData.Title = "";
-//         }
-//         const linkElement = result.querySelector('.result-title');
-//         extractData.Link = linkElement ? linkElement.getAttribute('href') : "";
-//         const sourceNameElement = result.querySelector('[data-bind="html: sourceName"]');
-//         extractData.SourceName = sourceNameElement ? sourceNameElement.textContent.trim() : "";
-//         const authorElement = result.querySelector('[id^="authors-result_"]');
-//         extractData.Author = authorElement ? authorElement.textContent.trim() : "";
-//         const dateElement = result.querySelector('[data-bind="foreach: dates"] [data-bind="html: value"]');
-//         extractData.Date = dateElement ? dateElement.textContent.trim() : "";
-//         let keywordsElement = "";
-//         const divElements = result.querySelectorAll('div');
-//         divElements.forEach(div => {
-//           if (div.textContent.includes('Keywords:')) {
-//             keywordsElement = div.querySelector('span[data-bind*="keywords.join"]');
-//           }
-//         });
-//         extractData.Keywords = keywordsElement ? keywordsElement.textContent.split(',').map(keyword => keyword.trim()) : "";
-//         const descriptionElement = result.querySelector('.result-snippet');
-//         extractData.Description = descriptionElement ? descriptionElement.textContent.trim() : "";
-//         extractDataArray.push(extractData);
-//       });
-//       return extractDataArray;
-//     });
+async function extractDataFromPage(page) {
+  try {
+    await page.waitForSelector('.result-list');
+    const results = await page.evaluate(() => {
+      const extractDataArray = [];
+      const resultElements = document.querySelectorAll('.result-list .result.even, .result-list .result.odd');
+      resultElements.forEach(result => {
+        const extractData = {};
+        const titleElement = result.querySelector('.result-title span[data-bind="html: title"]');
+        if (titleElement) {
+          const clone = titleElement.cloneNode(true);
+          clone.querySelectorAll('span.hlt').forEach(innerSpan => {
+            innerSpan.replaceWith(innerSpan.textContent);
+          });
+          extractData.Title = clone.textContent.trim();
+        } else {
+          extractData.Title = "";
+        }
+        const linkElement = result.querySelector('.result-title');
+        extractData.Link = linkElement ? linkElement.getAttribute('href') : "";
+        const sourceNameElement = result.querySelector('[data-bind="html: sourceName"]');
+        extractData.SourceName = sourceNameElement ? sourceNameElement.textContent.trim() : "";
+        const authorElement = result.querySelector('[id^="authors-result_"]');
+        extractData.Author = authorElement ? authorElement.textContent.trim() : "";
+        const dateElement = result.querySelector('[data-bind="foreach: dates"] [data-bind="html: value"]');
+        extractData.Date = dateElement ? dateElement.textContent.trim() : "";
+        let keywordsElement = "";
+        const divElements = result.querySelectorAll('div');
+        divElements.forEach(div => {
+          if (div.textContent.includes('Keywords:')) {
+            keywordsElement = div.querySelector('span[data-bind*="keywords.join"]');
+          }
+        });
+        extractData.Keywords = keywordsElement ? keywordsElement.textContent.split(',').map(keyword => keyword.trim()) : "";
+        const descriptionElement = result.querySelector('.result-snippet');
+        extractData.Description = descriptionElement ? descriptionElement.textContent.trim() : "";
+        extractDataArray.push(extractData);
+      });
+      return extractDataArray;
+    });
 
-//     console.log('Extracted results!');
-//     return results;
-//   } catch (error) {
-//     console.error('Error extracting data from page:', error);
-//     return [];
-//   }
-// }
+    console.log('Extracted results!');
+    return results;
+  } catch (error) {
+    console.error('Error extracting data from page:', error);
+    return [];
+  }
+}
 
 
 async function scrapeData(phrase) {
-  return new Promise((resolve, reject) => {
-    let results =[]
-    const command = `python scraping.py "${phrase}"`;
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error executing Python script: ${stderr}`);
-        reject(error);
-      } else {
-        try {
-          results = JSON.parse(stdout);
-          allResults = allResults.concat(results);
-          if (Array.isArray(results)) {
-            console.log(`Successfully scraped for the phrase ${phrase}`);
-            console.log(results.length);
-            console.log(allResults.length);
-            resolve(results);
-          } else if (results.error) {
-            console.error(`Python script error: ${results.error}`);
-            reject(new Error(results.error));
-          } else {
-            console.error('Unexpected output format from Python script');
-            reject(new Error('Unexpected output format'));
+  let maxRetries=3;
+  let attempts = 0;
+  while (attempts < maxRetries) {
+    try {
+      const browser = await puppeteer.launch({ 
+        headless: true,
+        defaultViewport: false,
+      });
+
+      const page = await browser.newPage();
+      await page.goto('https://oer.deepwebaccess.com/oer/desktop/en/search.html', { waitUntil: 'networkidle2' });
+
+      page.setDefaultTimeout(60000);
+      await page.waitForSelector('#FULLRECORD');
+      console.log(`Page loaded for phrase: ${phrase}`);
+      await page.type('#FULLRECORD', phrase);
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#add-results-modal', { visible: true });
+      await page.waitForSelector('#add-results-modal .btn.btn-primary');
+      await page.click('#add-results-modal .btn.btn-primary');
+      console.log(`Got additional results for phrase: ${phrase}`);
+      
+      let phraseResults = [];
+      for (let pageNum = 1; pageNum <= 3; pageNum++) {
+        console.log(`Extracting data from page ${pageNum} for phrase: ${phrase}...`);
+        const pageResults = await extractDataFromPage(page);
+        phraseResults = phraseResults.concat(pageResults);
+        if (pageNum < 3) {
+          try {
+            const expectedStartNum = pageNum * 20 + 1;
+            await page.waitForSelector('li:not(.disabled) a[data-bind="click: function(){ CurrentPage(CurrentPage() + 1); }"]', { visible: true });
+            await page.evaluate(() => {
+              const nextButton = document.querySelector('li:not(.disabled) a[data-bind="click: function(){ CurrentPage(CurrentPage() + 1); }"]');
+              if (nextButton) nextButton.click();
+            });
+            await page.waitForFunction(
+              (expectedStartNum) => {
+                const startNumElement = document.querySelector('#current-results span[data-bind="count: startNum"]');
+                return startNumElement && parseInt(startNumElement.textContent, 10) === expectedStartNum;
+              },
+              { timeout: 5000 },
+              expectedStartNum
+            );
+          } catch (error) {
+            console.error(`Error navigating to page ${pageNum + 1} for phrase: ${phrase}`, error);
+            break;
           }
-        } catch (parseError) {
-          console.error('Error parsing Python script output:', parseError);
-          reject(parseError);
         }
       }
-    });
-  });
+
+      allResults = allResults.concat(phraseResults);
+      await browser.close();
+      
+      break;
+    } catch (error) {
+      attempts++;
+      console.error(`Attempt ${attempts} failed for phrase: ${phrase}`, error);
+      if (attempts >= maxRetries) {
+        console.error(`Max retries reached for phrase: ${phrase}.`);
+        throw error; 
+      }
+    }
+  }
 }
-  // let attempts = 0;
-  // while (attempts < maxRetries) {
-  //   try {
-  //     const browser = await puppeteer.launch({ 
-  //       headless: true,
-  //       defaultViewport: false,
-  //     });
-
-  //     const page = await browser.newPage();
-  //     await page.goto('https://oer.deepwebaccess.com/oer/desktop/en/search.html', { waitUntil: 'networkidle2' });
-
-  //     page.setDefaultTimeout(60000);
-  //     await page.waitForSelector('#FULLRECORD');
-  //     console.log(`Page loaded for phrase: ${phrase}`);
-  //     await page.type('#FULLRECORD', phrase);
-  //     await page.keyboard.press('Enter');
-  //     await page.waitForSelector('#add-results-modal', { visible: true });
-  //     await page.waitForSelector('#add-results-modal .btn.btn-primary');
-  //     await page.click('#add-results-modal .btn.btn-primary');
-  //     console.log(`Got additional results for phrase: ${phrase}`);
-      
-  //     let phraseResults = [];
-  //     for (let pageNum = 1; pageNum <= 3; pageNum++) {
-  //       console.log(`Extracting data from page ${pageNum} for phrase: ${phrase}...`);
-  //       const pageResults = await extractDataFromPage(page);
-  //       phraseResults = phraseResults.concat(pageResults);
-  //       if (pageNum < 3) {
-  //         try {
-  //           const expectedStartNum = pageNum * 20 + 1;
-  //           await page.waitForSelector('li:not(.disabled) a[data-bind="click: function(){ CurrentPage(CurrentPage() + 1); }"]', { visible: true });
-  //           await page.evaluate(() => {
-  //             const nextButton = document.querySelector('li:not(.disabled) a[data-bind="click: function(){ CurrentPage(CurrentPage() + 1); }"]');
-  //             if (nextButton) nextButton.click();
-  //           });
-  //           await page.waitForFunction(
-  //             (expectedStartNum) => {
-  //               const startNumElement = document.querySelector('#current-results span[data-bind="count: startNum"]');
-  //               return startNumElement && parseInt(startNumElement.textContent, 10) === expectedStartNum;
-  //             },
-  //             { timeout: 5000 },
-  //             expectedStartNum
-  //           );
-  //         } catch (error) {
-  //           console.error(`Error navigating to page ${pageNum + 1} for phrase: ${phrase}`, error);
-  //           break;
-  //         }
-  //       }
-  //     }
-
-  //     allResults = allResults.concat(phraseResults);
-  //     await browser.close();
-      
-  //     break;
-  //   } catch (error) {
-  //     attempts++;
-  //     console.error(`Attempt ${attempts} failed for phrase: ${phrase}`, error);
-  //     if (attempts >= maxRetries) {
-  //       console.error(`Max retries reached for phrase: ${phrase}.`);
-  //       throw error; 
-  //     }
-  //   }
-  // }
-
 
 
 function fileCreate(file_path, data) {
@@ -265,17 +264,3 @@ function fileCreate(file_path, data) {
   });
 }
 
-function runPythonScript(inputText,user_input,hf_bearer_token) {
-  return new Promise((resolve, reject) => {
-    const command = `python similarity.py "${inputText}" "${user_input}" "${hf_bearer_token}"`;
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error executing Python script: ${stderr}`);
-            reject(error);
-        } else {
-            console.log(`Python script output: ${stdout}`);
-            resolve(stdout);
-        }
-    });
-});
-}
