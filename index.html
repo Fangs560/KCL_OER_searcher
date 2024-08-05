@@ -1,239 +1,325 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
-    <meta charset="UTF-8">
+  <head>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC"
+      crossorigin="anonymous"
+    />
+    <meta charset="UTF-8" />
     <title>Text Processor</title>
     <style>
-        .editable {
-            display: inline-block;
-            padding: 5px;
-            border: 1px solid #ccc;
-        }
+      .editable {
+        display: inline-block;
+        padding: 5px;
+        border: 1px solid #ccc;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <nav class="navbar navbar-light bg-light">
-        <div class="container-fluid">
-          <span class="navbar-brand mb-0 h1">Enhanced OER Search</span>
-        </div>
-      </nav>
-    <br>
+      <div class="container-fluid">
+        <span class="navbar-brand mb-0 h1">Enhanced OER Search</span>
+      </div>
+    </nav>
+    <br />
     <div class="container">
-        <div class="row">
-            <div class="col"></div>
-            <div class="col-6">
-                <form id="text-form" >
-                    <div class="form-floating">
-                    <textarea class="form-control"id="input-text" style="height: 100px"></textarea>
-                <label for="input-text">Please give your description</label></div>
-                <br>
-                    <input id="g-bearer-token" placeholder="Enter your Gemini bearer token here" style="width: 350px">
-                    <span id="g-bearer-token-status"></span>
-                    <br><br>
-                    <button disabled id="submit-google" class="btn btn-primary" type="submit">Submit</button>
-                    <br><br>
-                </form>
+      <div class="row">
+        <div class="col"></div>
+        <div class="col-6">
+          <form id="text-form">
+            <div class="form-floating">
+              <textarea
+                class="form-control"
+                id="input-text"
+                style="height: 100px"
+              ></textarea>
+              <label for="input-text">Please give your description</label>
             </div>
-            <div class="col"></div>
+            <br />
+            <input
+              id="g-bearer-token"
+              placeholder="Enter your Gemini bearer token here"
+              style="width: 350px"
+            />
+            <span id="g-bearer-token-status"></span>
+            <br /><br />
+            <button
+              disabled
+              id="submit-google"
+              class="btn btn-primary"
+              type="submit"
+            >
+              Submit
+            </button>
+            <br /><br />
+          </form>
         </div>
-        <div class="row">
-            <div class="col"></div>
-            <div class="col-6">
-                <input type="text" id="new-keyphrase" placeholder="Add new keyphrase">
-                <button id="add-keyphrase">Add Keyphrase</button>
-                <div id="Keywords"></div>
-                <ul id="list"></ul>
-            </div>
-            <div class="col"></div>
+        <div class="col"></div>
+      </div>
+      <div class="row">
+        <div class="col"></div>
+        <div class="col-6">
+          <input
+            type="text"
+            id="new-keyphrase"
+            placeholder="Add new keyphrase"
+          />
+          <button id="add-keyphrase">Add Keyphrase</button>
+          <div id="Keywords"></div>
+          <ul id="list"></ul>
         </div>
-        <div class="row">
-            <div class="col"></div>
-            <div class="col-6">
-                <br><input id="hf-bearer-token" placeholder="Enter your HuggingFace bearer token here" style="width: 350px">
-                <span id="hf-bearer-token-status"></span><br>
-                <form id="scraper-form">
-                    <button disabled id="submit-hf" class="btn btn-primary" type="submit">Send for Scraping</button>
-                </form>
-                <div id="results"></div>
-            </div>
-            <div class="col"></div>
+        <div class="col"></div>
+      </div>
+      <div class="row">
+        <div class="col"></div>
+        <div class="col-6">
+          <br /><input
+            id="hf-bearer-token"
+            placeholder="Enter your HuggingFace bearer token here"
+            style="width: 350px"
+          />
+          <span id="hf-bearer-token-status"></span><br />
+          <form id="scraper-form">
+            <button
+              disabled
+              id="submit-hf"
+              class="btn btn-primary"
+              type="submit"
+            >
+              Send for Scraping
+            </button>
+          </form>
+          <div id="results"></div>
         </div>
+        <div class="col"></div>
+      </div>
     </div>
-    <br>
-    
+    <br />
+
     <div id="pagination"></div>
     <div id="content-container"></div>
 
     <script>
-        let keyPhrases = [];
-        let input_text = "";
-        let currentPage = 1;
-        let resultsPerPage = 15;
-        let allData = [];
+      let keyPhrases = [];
+      let input_text = "";
+      let currentPage = 1;
+      let resultsPerPage = 15;
+      let allData = [];
+    
+    //   Submit request for obtaining key phrases
+      document
+        .getElementById("text-form")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+          input_text = document.getElementById("input-text").value;
+          if (input_text.includes("\0") || !input_text) {
+            alert("There is no description given. Please write a description.");
+            return;
+          }
+          document.getElementById("Keywords").innerText = "";
 
-        document.getElementById('text-form').addEventListener('submit', function(event) {
-            event.preventDefault();
-            input_text = document.getElementById('input-text').value;
-            if (input_text.includes('\0') || !input_text) {
-                alert('The input text contains null characters. Please remove them.');
-                return;
-            }
-            document.getElementById('Keywords').innerText="";
+          Gemini_bearer_token = document.getElementById("g-bearer-token").value;
+          if (Gemini_bearer_token.includes("\0") || !Gemini_bearer_token) {
+            alert("Please enter a Google Gemini connected bearer token.");
+            return;
+          }
 
-            Gemini_bearer_token = document.getElementById('g-bearer-token').value;
-            if (Gemini_bearer_token.includes('\0') || !Gemini_bearer_token) {
-                alert('Please enter a Google Gemini connected bearer token.');
-                return;
-            }
-            
-            fetch('/processResults', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ text: input_text ,Gbearer : Gemini_bearer_token })
+          fetch("/processResults", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text: input_text,
+              Gbearer: Gemini_bearer_token,
+            }),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              keyPhrases = data.Keywords;
+              console.log(keyPhrases);
+              renderList();
             })
-            .then(response => response.json())
-            .then(data => {
-                keyPhrases = data.Keywords;
-                console.log(keyPhrases);
-                renderList();
-            })
-            .catch(error => {
-                document.getElementById('Keywords').innerText = "Error. Please try Re-submitting or check your API key.";
-                console.error('Error:', error);
+            .catch((error) => {
+              document.getElementById("Keywords").innerText =
+                "Please try re-submitting in a few seconds.";
+              console.error("Error:", error);
             });
         });
 
-        document.getElementById('scraper-form').addEventListener('submit', function(event) {
-            event.preventDefault();
-            if (keyPhrases.length === 0) {
-                alert('The key phrase list is empty. Please add at least one key phrase before sending for scraping.');
-                return;
-            }
-            HuggingFace_bearer_token = document.getElementById('hf-bearer-token').value;
-            if (HuggingFace_bearer_token.includes('\0') || !HuggingFace_bearer_token) {
-                alert('Please enter a HuggingFace connected bearer token.');
-                return;
-            }
-            
-            fetch('/resultScraper', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ Keywords: keyPhrases, Description: input_text , HFbearer : HuggingFace_bearer_token})
+    // Submitting request to perform webscraping and making request to fetch data 
+      document
+        .getElementById("scraper-form")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+          if (keyPhrases.length === 0) {
+            alert(
+              "The key phrase list is empty. Please add at least one key phrase before sending for scraping."
+            );
+            return;
+          }
+          HuggingFace_bearer_token =
+            document.getElementById("hf-bearer-token").value;
+          if (
+            HuggingFace_bearer_token.includes("\0") ||
+            !HuggingFace_bearer_token
+          ) {
+            alert("Please enter a HuggingFace connected bearer token.");
+            return;
+          }
+
+          fetch("/resultScraper", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              Keywords: keyPhrases,
+              Description: input_text,
+              HFbearer: HuggingFace_bearer_token,
+            }),
+          })
+            .then((response) => response.text())
+            .then((data) => {
+              document.getElementById("results").innerText = data;
+              return fetchData();
             })
-            .then(response => response.text())
-            .then(data => {
-                document.getElementById('results').innerText = data;
-                return fetchData();
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                document.getElementById('results').innerText = "An error occurred: " + error.message;
+            .catch((error) => {
+              console.error("Error:", error);
+              document.getElementById("results").innerText =
+                "An error occurred: " + error.message;
             });
         });
 
-        document.getElementById('g-bearer-token').addEventListener('blur', verifyGoogleToken);
-        function verifyGoogleToken(){
-            document.getElementById("g-bearer-token-status").innerText="";
-            const tokenInput = document.getElementById('g-bearer-token');
-            document.getElementById("g-bearer-token-status").classList.remove("text-success");
-            document.getElementById("g-bearer-token-status").classList.remove("text-danger");
-            const tokenValue = tokenInput.value;
-            fetch('/verifyGoogle',{
-                method:'POST',
-                headers:{
-                    'Content-Type':'application/json'
-                },
-                body: JSON.stringify({Gbearer: tokenValue})
-            })
-            .then(response => response.json())
-            .then(data => {
-                const tokenStatus = data.status;
-                if (tokenStatus === "Valid API bearer token") {
-                    document.getElementById("g-bearer-token-status").innerText=tokenStatus;
-                    document.getElementById("g-bearer-token-status").classList.add("text-success");
-                    tokenInput.classList.remove('border-danger');
-                    tokenInput.classList.add('border-success');
-                    tokenInput.disabled = true;
-                    document.getElementById("submit-google").disabled=false
-                } else if (tokenStatus === "Invalid API bearer token") {
-                    document.getElementById("g-bearer-token-status").innerText=tokenStatus;
-                    document.getElementById("g-bearer-token-status").classList.add("text-danger");
-                    tokenInput.classList.remove('border-success');
-                    tokenInput.classList.add('border-danger');
-                }
-            })
-        }
-        
-        document.getElementById('hf-bearer-token').addEventListener('blur', verifyHuggingFaceToken);
-        function verifyHuggingFaceToken(){
-            document.getElementById("hf-bearer-token-status").innerText="";
-            const tokenInput = document.getElementById('hf-bearer-token');
-            document.getElementById("hf-bearer-token-status").classList.remove("text-success");
-            document.getElementById("hf-bearer-token-status").classList.remove("text-danger");
-            const tokenValue = tokenInput.value;
-            fetch('/verifyHuggingFace',{
-                method:'POST',
-                headers:{
-                    'Content-Type':'application/json'
-                },
-                body: JSON.stringify({hf_bearer_token: tokenValue})
-            })
-            .then(response => response.json())
-            .then(data => {
-                const tokenStatus = data.status;
-                if (tokenStatus === "Valid API bearer token") {
-                    document.getElementById("hf-bearer-token-status").innerText=tokenStatus;
-                    document.getElementById("hf-bearer-token-status").classList.add("text-success");
-                    tokenInput.classList.remove('border-danger');
-                    tokenInput.classList.add('border-success');
-                    tokenInput.disabled = true;
-                    document.getElementById("submit-hf").disabled=false
-                } else if (tokenStatus === "Invalid API bearer token") {
-                    document.getElementById("hf-bearer-token-status").innerText=tokenStatus;
-                    document.getElementById("hf-bearer-token-status").classList.add("text-danger");
-                    tokenInput.classList.remove('border-success');
-                    tokenInput.classList.add('border-danger');
-                }
-            })
-        }
+    // Verifying authenticity of Google Bearer token
+      document
+        .getElementById("g-bearer-token")
+        .addEventListener("blur", verifyGoogleToken);
+      function verifyGoogleToken() {
+        document.getElementById("g-bearer-token-status").innerText = "";
+        const tokenInput = document.getElementById("g-bearer-token");
+        document
+          .getElementById("g-bearer-token-status")
+          .classList.remove("text-success");
+        document
+          .getElementById("g-bearer-token-status")
+          .classList.remove("text-danger");
+        const tokenValue = tokenInput.value;
+        fetch("/verifyGoogle", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ Gbearer: tokenValue }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            const tokenStatus = data.status;
+            if (tokenStatus === "Valid bearer token") {
+              document.getElementById("g-bearer-token-status").innerText =
+                tokenStatus;
+              document
+                .getElementById("g-bearer-token-status")
+                .classList.add("text-success");
+              tokenInput.classList.remove("border-danger");
+              tokenInput.classList.add("border-success");
+              tokenInput.disabled = true;
+              document.getElementById("submit-google").disabled = false;
+            } else if (tokenStatus === "Invalid bearer token") {
+              document.getElementById("g-bearer-token-status").innerText =
+                tokenStatus;
+              document
+                .getElementById("g-bearer-token-status")
+                .classList.add("text-danger");
+              tokenInput.classList.remove("border-success");
+              tokenInput.classList.add("border-danger");
+            }
+          });
+      }
 
-        function fetchData() {
-            fetch('/data', {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                allData = data;
-                currentPage = 1;
-                displayData();
-            })
-            .catch(error => console.error('Error:', error));
-        }
-        function displayData() {
-            const paginationContainer = document.getElementById('pagination');
-            paginationContainer.innerHTML = `
+    //   Verifying authenticity of HuggingFace bearer token
+      document
+        .getElementById("hf-bearer-token")
+        .addEventListener("blur", verifyHuggingFaceToken);
+      function verifyHuggingFaceToken() {
+        document.getElementById("hf-bearer-token-status").innerText = "";
+        const tokenInput = document.getElementById("hf-bearer-token");
+        document
+          .getElementById("hf-bearer-token-status")
+          .classList.remove("text-success");
+        document
+          .getElementById("hf-bearer-token-status")
+          .classList.remove("text-danger");
+        const tokenValue = tokenInput.value;
+        fetch("/verifyHuggingFace", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ hf_bearer_token: tokenValue }),
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            const tokenStatus = data.status;
+            if (tokenStatus === "Valid bearer token") {
+              document.getElementById("hf-bearer-token-status").innerText =
+                tokenStatus;
+              document
+                .getElementById("hf-bearer-token-status")
+                .classList.add("text-success");
+              tokenInput.classList.remove("border-danger");
+              tokenInput.classList.add("border-success");
+              tokenInput.disabled = true;
+              document.getElementById("submit-hf").disabled = false;
+            } else if (tokenStatus === "Invalid bearer token") {
+              document.getElementById("hf-bearer-token-status").innerText =
+                tokenStatus;
+              document
+                .getElementById("hf-bearer-token-status")
+                .classList.add("text-danger");
+              tokenInput.classList.remove("border-success");
+              tokenInput.classList.add("border-danger");
+            }
+          });
+      }
+
+    // Request to obtain JSON data
+      function fetchData() {
+        fetch("/data", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            allData = data;
+            currentPage = 1;
+            displayData();
+          })
+          .catch((error) => console.error("Error:", error));
+      }
+
+    //   Displaying all the OER values on the webpage along with pagination functionality
+      function displayData() {
+        const paginationContainer = document.getElementById("pagination");
+        paginationContainer.innerHTML = `
                 <button id="prevPage" onclick="prevPage()">Previous</button>
                 <span id="pageInfo"></span>
                 <button id="nextPage" onclick="nextPage()">Next</button>
             `;
-            const contentContainer = document.getElementById('content-container');
-            contentContainer.innerHTML = '';
-            const startIndex = (currentPage - 1) * resultsPerPage;
-            const endIndex = Math.min(startIndex + resultsPerPage, allData.length);
-            for (let i = startIndex; i < endIndex; i++) {
-                const item = document.createElement('div');
-                item.classList.add("list-group");
-                if(i%2==0){
-                    item.classList.add("list-group-item-secondary");
-                    item.innerHTML = `
+        const contentContainer = document.getElementById("content-container");
+        contentContainer.innerHTML = "";
+        const startIndex = (currentPage - 1) * resultsPerPage;
+        const endIndex = Math.min(startIndex + resultsPerPage, allData.length);
+        for (let i = startIndex; i < endIndex; i++) {
+          const item = document.createElement("div");
+          item.classList.add("list-group");
+          if (i % 2 == 0) {
+            item.classList.add("list-group-item-secondary");
+            item.innerHTML = `
                     <span><strong>Title:</strong><a href="${allData[i].Link}" target="_blank"> ${allData[i].Title}</a></span>
                     <span><strong>Source Name:</strong> ${allData[i].SourceName}</span>
                     <span><strong>Author:</strong> ${allData[i].Author}</span>
@@ -242,11 +328,10 @@
                     <span><strong>Description:</strong> ${allData[i].Description}</span>    
                     <br><br>
                     `;
-                    contentContainer.appendChild(item);
-                }
-                else{
-                        item.classList.add("list-group-item-light");
-                        item.innerHTML = `
+            contentContainer.appendChild(item);
+          } else {
+            item.classList.add("list-group-item-light");
+            item.innerHTML = `
                         <span><strong>Title:</strong><a href="${allData[i].Link}" target="_blank"> ${allData[i].Title}</a></span>
                         <span><strong>Source Name:</strong> ${allData[i].SourceName}</span>
                         <span><strong>Author:</strong> ${allData[i].Author}</span>
@@ -256,110 +341,117 @@
                         <br>
                         <br>
                     `;
-                    contentContainer.appendChild(item);
-
-                }
-            }
-            updatePagination();
+            contentContainer.appendChild(item);
+          }
         }
+        updatePagination();
+      }
+    //   Pagination functions to navigate through search results
+      function updatePagination() {
+        const pageInfo = document.getElementById("pageInfo");
+        pageInfo.textContent = `Page ${currentPage} of ${Math.ceil(
+          allData.length / resultsPerPage
+        )}`;
+        document.getElementById("prevPage").disabled = currentPage === 1;
+        document.getElementById("nextPage").disabled =
+          currentPage === Math.ceil(allData.length / resultsPerPage);
+      }
 
-
-        function updatePagination() {
-            const pageInfo = document.getElementById('pageInfo');
-            pageInfo.textContent = `Page ${currentPage} of ${Math.ceil(allData.length / resultsPerPage)}`;
-            document.getElementById('prevPage').disabled = currentPage === 1;
-            document.getElementById('nextPage').disabled = currentPage === Math.ceil(allData.length / resultsPerPage);
+      function prevPage() {
+        if (currentPage > 1) {
+          currentPage--;
+          displayData();
         }
+      }
 
-        function prevPage() {
-            if (currentPage > 1) {
-                currentPage--;
-                displayData();
-            }
+      function nextPage() {
+        if (currentPage < Math.ceil(allData.length / resultsPerPage)) {
+          currentPage++;
+          displayData();
         }
+      }
 
-        function nextPage() {
-            if (currentPage < Math.ceil(allData.length / resultsPerPage)) {
-                currentPage++;
-                displayData();
-            }
-        }
-
-        document.getElementById('add-keyphrase').addEventListener('click', function() {
-            const newKeyphrase = document.getElementById('new-keyphrase').value;
-            if (newKeyphrase && keyPhrases.length < 10) {
-                keyPhrases.push(newKeyphrase);
-                document.getElementById('new-keyphrase').value = '';
-                renderList();
-            } else if (keyPhrases.length >= 10) {
-                alert('You can only add up to 10 keyphrases.');
-            }
+      document
+        .getElementById("add-keyphrase")
+        .addEventListener("click", function () {
+          const newKeyphrase = document.getElementById("new-keyphrase").value;
+          if (newKeyphrase && keyPhrases.length < 10) {
+            keyPhrases.push(newKeyphrase);
+            document.getElementById("new-keyphrase").value = "";
+            renderList();
+          } else if (keyPhrases.length >= 10) {
+            alert("You can only add up to 10 keyphrases.");
+          }
         });
 
-        function renderList() {
-            const listElement = document.getElementById('list');
-            listElement.innerHTML = '';
-            keyPhrases.forEach((item, index) => {
-                const li = document.createElement('li');
+    //  Displaying the generated key phrases
+      function renderList() {
+        const listElement = document.getElementById("list");
+        listElement.innerHTML = "";
+        keyPhrases.forEach((item, index) => {
+          const li = document.createElement("li");
 
-                const listItemContent = document.createElement("div");
-                listItemContent.className="input-group";
+          const listItemContent = document.createElement("div");
+          listItemContent.className = "input-group";
 
-                const span = document.createElement('span');
-                span.className = 'editable';
-                span.textContent = item;
-                
-                const editButton = document.createElement('button');
-                editButton.textContent = 'Edit';
-                editButton.className = 'btn btn-outline-primary';
-                editButton.addEventListener('click', () => editItem(index, span,editButton));
-                
-                const deleteButton = document.createElement('button');
-                deleteButton.textContent = 'Delete';
-                deleteButton.className = 'btn btn-outline-danger';
-                deleteButton.addEventListener('click', () => deleteItem(index));
-                
-                li.appendChild(span);
-                li.appendChild(editButton);
-                li.appendChild(deleteButton);
-                listElement.appendChild(li);
-            });
-        }
-        
-        function editItem(index, spanElement, editElement) {
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.value = keyPhrases[index];
-            input.className = 'input-edit';
-            const confirmButton = document.createElement('button');
-            confirmButton.textContent = 'Confirm ?';
-            confirmButton.className = 'btn btn-outline-success';
-            editElement.replaceWith(confirmButton);
+          const span = document.createElement("span");
+          span.className = "editable";
+          span.textContent = item;
 
-            confirmButton.addEventListener('click', () => {
-                const editButton = document.createElement('button');
-                editButton.textContent = 'Edit';
-                editButton.className = 'btn btn-outline-primary';
-                editButton.addEventListener('click', () => editItem(index, spanElement,editButton));
-                confirmButton.replaceWith(editButton);
-                saveItem(index, input,spanElement);
-            });
-            spanElement.replaceWith(input);
-            input.focus();
-        }
-                
-        function saveItem(index, inputElement, spanElement) {
-            keyPhrases[index] = inputElement.value;
-            spanElement.textContent = inputElement.value;
-            inputElement.replaceWith(spanElement);
-        }
-        
-        function deleteItem(index) {
-            keyPhrases.splice(index, 1);
-            renderList();
-        }
-                
+          const editButton = document.createElement("button");
+          editButton.textContent = "Edit";
+          editButton.className = "btn btn-outline-primary";
+          editButton.addEventListener("click", () =>
+            editItem(index, span, editButton)
+          );
+
+          const deleteButton = document.createElement("button");
+          deleteButton.textContent = "Delete";
+          deleteButton.className = "btn btn-outline-danger";
+          deleteButton.addEventListener("click", () => deleteItem(index));
+
+          li.appendChild(span);
+          li.appendChild(editButton);
+          li.appendChild(deleteButton);
+          listElement.appendChild(li);
+        });
+      }
+      
+    //   Editing key phrases
+      function editItem(index, spanElement, editElement) {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = keyPhrases[index];
+        input.className = "input-edit";
+        const confirmButton = document.createElement("button");
+        confirmButton.textContent = "Confirm ?";
+        confirmButton.className = "btn btn-outline-success";
+        editElement.replaceWith(confirmButton);
+
+        confirmButton.addEventListener("click", () => {
+          const editButton = document.createElement("button");
+          editButton.textContent = "Edit";
+          editButton.className = "btn btn-outline-primary";
+          editButton.addEventListener("click", () =>
+            editItem(index, spanElement, editButton)
+          );
+          confirmButton.replaceWith(editButton);
+          saveItem(index, input, spanElement);
+        });
+        spanElement.replaceWith(input);
+        input.focus();
+      }
+
+      function saveItem(index, inputElement, spanElement) {
+        keyPhrases[index] = inputElement.value;
+        spanElement.textContent = inputElement.value;
+        inputElement.replaceWith(spanElement);
+      }
+
+      function deleteItem(index) {
+        keyPhrases.splice(index, 1);
+        renderList();
+      }
     </script>
-    
-</body>
+  </body>
 </html>
