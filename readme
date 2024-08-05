@@ -15,6 +15,6 @@ Requirements and steps to run the program:
     - npm init (This command will ask for certain inputs each of which can be ignored by pressing the "Enter" key; Press "Enter" key again when asked to confirm changes)
     - npm install (This may take a while as all node modules and dependencies are being installed)
     - npm start (This command is used to start the server)
-- Goto to a webpage and access the code using the link : http://127.0.0.1:3000/
+- Go to a webpage and access the code using the link : http://127.0.0.1:3000/
 
 
